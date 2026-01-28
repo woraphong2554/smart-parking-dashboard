@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MAX Alert - Premium Blur Edition</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg: #0F172A; --card: rgba(30, 41, 59, 0.7); --primary: #3B82F6; 
+            --green: #10B981; --red: #EF4444; --orange: #F59E0B; --text: #F8FAFC; --dim: #94A3B8;
+        }
+        [data-theme="light"] { --bg: #f8fafc; --card: rgba(255, 255, 255, 0.7); --text: #1e293b; --dim: #64748b; }
+
+        body { 
+            font-family: 'Kanit', sans-serif; background: var(--bg); color: var(--text); 
+            margin: 0; padding: 0; min-height: 100vh; overflow-x: hidden; transition: 0.3s;
+        }
+
+        /* --- 🏎️ Animation: Falling Cars (แบบชัดปกติ แต่อยู่ข้างหลัง) --- */
+        .falling-car {
+            position: fixed;
+            top: -50px;
+            font-size: 24px;
+            z-index: -1; /* วิ่งอยู่หลังสุด */
+            opacity: 0.3; /* ความจางของรถ */
+            pointer-events: none;
+            animation: fall linear forwards;
+        }
+
+        @keyframes fall {
+            0% { transform: translateY(0) rotate(0deg); }
+            100% { transform: translateY(110vh) rotate(360deg); }
+        }
+
+        /* --- ✨ Auth Overlay (หน้าเปิด) --- */
+        #auth-overlay {
+            position: fixed; inset: 0; background: rgba(11, 17, 33, 0.8); z-index: 6000;
+            display: flex; justify-content: center; align-items: center; padding: 20px;
+            overflow: hidden;
+            /* ทำให้รถเบลอเวลาผ่านหน้าเปิด */
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .orb {
+            position: absolute; width: 400px; height: 400px; border-radius: 50%;
+            filter: blur(80px); opacity: 0.15; z-index: -2; animation: orbit 15s infinite linear;
+        }
+        .orb-1 { background: var(--primary); top: -10%; left: -10%; }
+        .orb-2 { background: #6366f1; bottom: -10%; right: -10%; animation-delay: -5s; }
+
+        @keyframes orbit {
+            0% { transform: rotate(0deg) translateX(50px) rotate(0deg); }
+            100% { transform: rotate(360deg) translateX(50px) rotate(-360deg); }
+        }
+
+        .auth-card {
+            background: var(--card); 
+            backdrop-filter: blur(15px); /* เบลอซ้ำในการ์ดให้ดูนวลขึ้น */
+            -webkit-backdrop-filter: blur(15px);
+            padding: 50px 30px; border-radius: 32px; 
+            width: 100%; max-width: 380px; text-align: center; position: relative;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideUp { 0% { opacity: 0; transform: translateY(30px); } 100% { opacity: 1; transform: translateY(0); } }
+        
+        .btn-admin-corner {
+            position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1); color: var(--dim); width: 40px; height: 40px; 
+            border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: 0.3s; font-size: 1.1rem;
+        }
+        .btn-admin-corner:hover { background: var(--primary); color: white; transform: rotate(15deg); }
+        .welcome-icon { font-size: 4rem; margin-bottom: 15px; display: block; filter: drop-shadow(0 0 10px var(--primary)); }
+        #admin-login-box { display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); }
+
+        /* --- 📊 Dashboard UI --- */
+        .admin-only, .user-only { display: none; } 
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; max-width: 1200px; margin: 0 auto; position: relative; }
+        .header-area { grid-column: span 2; display: flex; justify-content: space-between; align-items: center; padding: 10px 0; }
+        
+        /* ✨ การ์ดกระจกฝ้า (เบลอรถที่ผ่านข้างหลัง) */
+        .card { 
+            background: var(--card); 
+            border-radius: 20px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); 
+            backdrop-filter: blur(12px); 
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .area-full { grid-column: span 2; }
+        .val-large { font-size: 3rem; font-weight: 700; color: var(--primary); }
+        
+        .btn-action { width: 100%; padding: 14px; border-radius: 14px; border: none; background: var(--primary); color: white; cursor: pointer; font-weight: 600; transition: 0.2s; font-size: 1rem; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+        .btn-red { background: var(--red); }
+        .btn-outline { background: transparent; border: 1px solid var(--dim); color: var(--dim); margin-top: 8px; }
+
+        input, textarea, select { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: inherit; padding: 12px; border-radius: 10px; width: 100%; box-sizing: border-box; margin-bottom: 10px; font-family: 'Kanit'; }
+        .progress-bg { height: 10px; background: rgba(0,0,0,0.3); border-radius: 5px; margin: 15px 0; overflow: hidden; }
+        .progress-fill { height: 100%; transition: 0.8s; }
+
+        #broadcast-bar { 
+            display: none; background: var(--red); color: white; padding: 10px; text-align: center; 
+            font-weight: 600; position: sticky; top: 0; z-index: 5000;
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes strobe { 0% { background: var(--bg); } 50% { background: #7f1d1d; } 100% { background: var(--bg); } }
+        .strobe-alert { animation: strobe 0.5s infinite !important; }
+
+        @media (max-width: 600px) { .dashboard-grid { display: flex; flex-direction: column; } }
+    </style>
+</head>
+<body id="main-body">
+
+    <div id="broadcast-bar"><span id="broadcast-msg">⚠️ ประกาศ: -- </span></div>
+
+    <div id="auth-overlay">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="auth-card">
+            <button class="btn-admin-corner" onclick="toggleAdminLogin()" title="Admin Login">🔑</button>
+            <div id="user-start-box">
+                <span class="welcome-icon">🛰️</span>
+                <h2 style="color:var(--text); margin: 0 0 5px 0; font-size: 1.8rem;">MAX Alert</h2>
+                <p style="color:var(--dim); font-size: 0.95rem; margin-bottom: 35px;">ระบบติดตามที่จอดรถและเฝ้าระวังภัย</p>
+                <button class="btn-action" onclick="enterApp('user')">👤 เข้าสู่หน้าแดชบอร์ด</button>
+            </div>
+            <div id="admin-login-box">
+                <p style="font-size: 0.85rem; color: var(--orange); margin-bottom: 15px;">พื้นที่สำหรับเจ้าหน้าที่ (Admin Area)</p>
+                <input type="password" id="admin-pass" placeholder="กรอกรหัสผ่าน Admin">
+                <button class="btn-action" style="background: #475569;" onclick="enterApp('admin')">Log In</button>
+                <button onclick="toggleAdminLogin()" style="background:none; border:none; color:var(--dim); margin-top: 15px; cursor:pointer; font-size: 0.85rem;">ย้อนกลับ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="emergency-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 7000; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(8px);">
+        <div class="card" style="width: 90%; max-width: 380px; text-align: center; border: 1px solid var(--red);">
+            <h2 style="color: var(--red);">🆘 แจ้งเหตุฉุกเฉิน</h2>
+            <p>กรุณาระบุตำแหน่งที่ต้องการความช่วยเหลือ</p>
+            <select id="sos-location">
+                <option value="ลานจอดรถ A">ลานจอดรถ A (Zone A)</option>
+                <option value="ลานจอดรถ B">ลานจอดรถ B (Zone B)</option>
+                <option value="ทางเข้าหลัก">ทางเข้าหลัก (Main Entrance)</option>
+            </select>
+            <button class="btn-action btn-red" onclick="confirmEmergency()">🚨 ส่งสัญญาณเรียก รปภ.</button>
+            <button class="btn-outline" onclick="toggleEmergencyModal(false)" style="border:none; cursor:pointer;">ยกเลิก</button>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="header-area">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <button onclick="location.reload()" class="btn-outline" style="padding: 5px 12px; font-size: 0.75rem; border-radius: 20px; margin:0; cursor:pointer;">Logout</button>
+                <select id="lang-selector" onchange="changeLang(this.value)" style="width: auto; margin:0; padding: 5px; font-size: 0.8rem;">
+                    <option value="th">TH 🇹🇭</option>
+                    <option value="en">EN 🇺🇸</option>
+                </select>
+            </div>
+            <h3 style="color: var(--primary); margin:0;" id="lang-app-title">Smart Parking</h3>
+            <button onclick="toggleTheme()" id="theme-btn" style="background:var(--card); border:none; border-radius:50%; cursor:pointer; width:35px; height:35px; color:var(--text);">🌙</button>
+        </div>
+
+        <div class="card">
+            <div id="lang-parking-title">🚗 ที่จอดรถ</div>
+            <div class="val-large"><span id="car-display">0</span><small style="font-size: 1.2rem; color:var(--dim)">/<span id="max-display">50</span></small></div>
+            <div class="progress-bg"><div id="car-bar" class="progress-fill" style="background: var(--green);"></div></div>
+            <div class="admin-only">
+                <input type="range" id="cap-slider" min="10" max="200" value="50" style="width: 100%;">
+                <button class="btn-outline" style="font-size: 0.75rem; width: 100%; cursor:pointer;" onclick="resetCarCount()">🔄 Reset Count</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div id="lang-fire-title">🔥 ความเสี่ยงไฟ</div>
+            <div class="val-large" style="color: var(--red);"><span id="smoke-display">0</span>%</div>
+            <div class="progress-bg"><div id="smoke-bar" class="progress-fill" style="background: var(--red);"></div></div>
+            <div class="user-only">
+                <button class="btn-action btn-red" style="padding: 10px;" onclick="toggleEmergencyModal(true)">🆘 SOS</button>
+            </div>
+            <div class="admin-only">
+                <textarea id="admin-bc-input" placeholder="พิมพ์ประกาศ..." rows="1" style="margin-bottom: 5px;"></textarea>
+                <button class="btn-action" style="font-size: 0.8rem; margin:0;" onclick="pushBroadcast()">📢 ประกาศ</button>
+                <button class="btn-outline" style="font-size: 0.75rem; width:100%; cursor:pointer;" onclick="clearBroadcast()">❌ ปิดประกาศ</button>
+            </div>
+        </div>
+
+        <div class="card area-full admin-only" id="sos-alert-box" style="display:none; background: #7f1d1d; border: 2px solid var(--red);">
+            <h2 style="margin:0; text-align:center;">🚨 SOS: <span id="sos-loc-display">--</span></h2>
+            <button class="btn-action" onclick="acknowledgeSOS()" style="background: white; color: black; margin-top: 10px;">รับทราบเหตุ / Clear</button>
+        </div>
+
+        <div class="card area-full">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span id="lang-history-title">📈 สถิติย้อนหลัง (ไทย)</span>
+                <input type="date" id="search-date" onchange="loadHistoryData()" style="width: auto; margin:0; padding: 5px;">
+            </div>
+            <div style="height: 200px;"><canvas id="historyChart"></canvas></div>
+        </div>
+
+        <div class="card area-full">
+            <h4 id="lang-feedback-title" style="margin-top:0;">📝 ข้อเสนอแนะ</h4>
+            <div class="user-only">
+                <input type="text" id="fb-name" placeholder="ชื่อ">
+                <textarea id="fb-comment" placeholder="ความคิดเห็น" rows="2"></textarea>
+                <button class="btn-action" onclick="sendFeedback()">ส่งข้อมูล</button>
+            </div>
+            <div class="admin-only" id="admin-feedback-list" style="font-size: 0.8rem; max-height: 150px; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- 🏎️ Falling Cars Script ---
+        const cars = ['🚗', '🚙', '🏎️', '🚕', '🚓', '🚘'];
+        function createFallingCar() {
+            const car = document.createElement('div');
+            car.className = 'falling-car';
+            car.innerText = cars[Math.floor(Math.random() * cars.length)];
+            car.style.left = Math.random() * 100 + 'vw';
+            car.style.animationDuration = Math.random() * 5 + 5 + 's'; 
+            car.style.fontSize = Math.random() * 10 + 20 + 'px';
+            document.body.appendChild(car);
+            setTimeout(() => { car.remove(); }, 10000);
+        }
+        setInterval(createFallingCar, 500);
+
+        // --- Firebase Config ---
+        const firebaseConfig = { databaseURL: "https://smartparking-b4be8-default-rtdb.asia-southeast1.firebasedatabase.app/" };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let currentUserRole = 'user';
+        let maxCap = 50;
+
+        function toggleAdminLogin() {
+            const u = document.getElementById('user-start-box');
+            const a = document.getElementById('admin-login-box');
+            if(u.style.display === 'none') { u.style.display = 'block'; a.style.display = 'none'; } 
+            else { u.style.display = 'none'; a.style.display = 'block'; }
+        }
+
+        function enterApp(role) {
+            if (role === 'admin' && document.getElementById('admin-pass').value !== '1234') { alert('รหัสผ่านไม่ถูกต้อง!'); return; }
+            currentUserRole = role;
+            document.getElementById('auth-overlay').style.display = 'none';
+            setupUI();
+        }
+
+        function setupUI() {
+            if (currentUserRole === 'admin') {
+                document.querySelectorAll('.admin-only').forEach(e => e.style.display = 'block');
+                listenSOS(); listenFeedback();
+            } else {
+                document.querySelectorAll('.user-only').forEach(e => e.style.display = 'block');
+                listenBroadcast();
+            }
+        }
+
+        function toggleEmergencyModal(show) { document.getElementById('emergency-modal').style.display = show ? 'flex' : 'none'; }
+        function confirmEmergency() {
+            const loc = document.getElementById('sos-location').value;
+            db.ref('sos_alert').set({ active: true, location: loc, time: new Date().getTime() });
+            alert("⚠️ แจ้งเหตุเรียบร้อย!"); toggleEmergencyModal(false);
+        }
+
+        function listenSOS() {
+            db.ref('sos_alert').on('value', s => {
+                const data = s.val();
+                if (data && data.active) {
+                    document.getElementById('main-body').classList.add('strobe-alert');
+                    document.getElementById('sos-alert-box').style.display = 'block';
+                    document.getElementById('sos-loc-display').innerText = data.location;
+                } else {
+                    document.getElementById('main-body').classList.remove('strobe-alert');
+                    document.getElementById('sos-alert-box').style.display = 'none';
+                }
+            });
+        }
+        function acknowledgeSOS() { db.ref('sos_alert').update({ active: false }); }
+
+        function pushBroadcast() {
+            const msg = document.getElementById('admin-bc-input').value;
+            if(msg) db.ref('broadcast').set({ message: msg, active: true });
+        }
+        function clearBroadcast() { db.ref('broadcast').update({ active: false }); }
+        function listenBroadcast() {
+            db.ref('broadcast').on('value', s => {
+                const data = s.val();
+                document.getElementById('broadcast-bar').style.display = (data && data.active) ? 'block' : 'none';
+                if(data && data.active) document.getElementById('broadcast-msg').innerText = "⚠️ " + data.message;
+            });
+        }
+
+        db.ref('live_status').on('value', (s) => {
+            const d = s.val() || { cars: 0, smoke: 0 };
+            document.getElementById('car-display').innerText = (d.cars >= maxCap) ? "MAX" : d.cars;
+            document.getElementById('car-bar').style.width = (d.cars / maxCap * 100) + "%";
+            document.getElementById('smoke-display').innerText = d.smoke;
+            document.getElementById('smoke-bar').style.width = d.smoke + "%";
+        });
+
+        document.getElementById('cap-slider').oninput = function() {
+            maxCap = this.value; document.getElementById('max-display').innerText = maxCap;
+        };
+        function resetCarCount() { if(confirm("Reset to 0?")) db.ref('live_status').update({ cars: 0 }); }
+
+        const ctx = document.getElementById('historyChart').getContext('2d');
+        const chart = new Chart(ctx, { type: 'line', data: { labels: [], datasets: [{ label: 'Cars', data: [], borderColor: '#3B82F6', tension: 0.3 }] }, options: { maintainAspectRatio: false } });
+
+        function loadHistoryData() {
+            const dateInput = document.getElementById('search-date').value;
+            if(!dateInput) return;
+            const [y, m, d] = dateInput.split('-');
+            db.ref('history/' + `${d}-${m}-${y}`).once('value').then(s => {
+                const data = s.val();
+                if (data) {
+                    const times = Object.keys(data).sort();
+                    chart.data.labels = times;
+                    chart.data.datasets[0].data = times.map(t => data[t].cars);
+                } else { chart.data.labels = ["No Data"]; chart.data.datasets[0].data = [0]; }
+                chart.update();
+            });
+        }
+
+        function sendFeedback() {
+            db.ref('feedbacks').push({ user: document.getElementById('fb-name').value, message: document.getElementById('fb-comment').value, time: new Date().toLocaleString() });
+            alert("Sent!");
+        }
+
+        function listenFeedback() {
+            db.ref('feedbacks').limitToLast(5).on('value', s => {
+                const list = document.getElementById('admin-feedback-list');
+                list.innerHTML = "";
+                s.forEach(i => { list.innerHTML = `<div><b>${i.val().user}:</b> ${i.val().message}</div>` + list.innerHTML; });
+            });
+        }
+
+        function toggleTheme() {
+            const current = document.body.getAttribute('data-theme');
+            document.body.setAttribute('data-theme', current === 'light' ? 'dark' : 'light');
+        }
+
+        window.onload = () => {
+            document.getElementById('search-date').value = new Date().toISOString().split('T')[0];
+            loadHistoryData();
+        };
+
+        function changeLang(lang) {
+            const t = translations[lang];
+            document.getElementById('lang-parking-title').innerText = t.parking;
+            document.getElementById('lang-fire-title').innerText = t.fire;
+            document.getElementById('lang-feedback-title').innerText = t.feedback;
+            document.getElementById('lang-history-title').innerText = t.hist;
+        }
+        const translations = {
+            th: { parking: "🚗 ที่จอดรถ", fire: "🔥 ความเสี่ยงไฟ", feedback: "📝 ข้อเสนอแนะ", hist: "📈 สถิติย้อนหลัง" },
+            en: { parking: "🚗 Parking Space", fire: "🔥 Fire Risk", feedback: "📝 Feedback", hist: "📈 History Stats" }
+        };
+    </script>
+</body>
+</html>
