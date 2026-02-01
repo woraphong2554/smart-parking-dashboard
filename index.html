@@ -64,7 +64,6 @@
         }
         .btn-admin-corner:hover { background: var(--primary); color: white; transform: rotate(15deg); }
         .welcome-icon { font-size: 4rem; margin-bottom: 15px; display: block; filter: drop-shadow(0 0 10px var(--primary)); }
-        #admin-login-box { display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); }
 
         .admin-only, .user-only { display: none; } 
         .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; max-width: 1200px; margin: 0 auto; position: relative; }
@@ -91,6 +90,17 @@
             font-weight: 600; position: sticky; top: 0; z-index: 5000; backdrop-filter: blur(10px);
         }
 
+        /* --- 📄 Objective Modal Styling --- */
+        .objective-modal {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 8000;
+            display: none; justify-content: center; align-items: center; padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .obj-content {
+            background: var(--card); padding: 30px; border-radius: 24px; max-width: 600px;
+            text-align: left; border: 1px solid rgba(255,255,255,0.1);
+        }
+
         @keyframes strobe { 0% { background: var(--bg); } 50% { background: #7f1d1d; } 100% { background: var(--bg); } }
         .strobe-alert { animation: strobe 0.5s infinite !important; }
 
@@ -109,15 +119,32 @@
             <div id="user-start-box">
                 <span class="welcome-icon">🛰️</span>
                 <h2 style="color:var(--text); margin: 0 0 5px 0; font-size: 1.8rem;">Parking System</h2>
-                <p style="color:var(--dim); font-size: 0.95rem; margin-bottom: 35px;">ระบบติดตามที่จอดรถและเฝ้าระวังภัย</p>
+                <p style="color:var(--dim); font-size: 0.95rem; margin-bottom: 25px;">ระบบติดตามที่จอดรถและเฝ้าระวังภัย</p>
                 <button class="btn-action" onclick="enterApp('user')">เข้าสู่หน้าแดชบอร์ด(User)</button>
+                <button class="btn-outline" style="width:100%; padding:10px; border-radius:12px; border-color:var(--primary); color:var(--primary); margin-top:10px; cursor:pointer;" onclick="toggleObjModal(true)">📖 จุดประสงค์ของโครงงาน</button>
             </div>
-            <div id="admin-login-box">
+            <div id="admin-login-box" style="display:none;">
                 <p style="font-size: 0.85rem; color: var(--orange); margin-bottom: 15px;">พื้นที่สำหรับเจ้าหน้าที่ (Admin Area)</p>
                 <input type="password" id="admin-pass" placeholder="กรอกรหัสผ่าน Admin">
                 <button class="btn-action" style="background: #475569;" onclick="enterApp('admin')">Log In</button>
                 <button onclick="toggleAdminLogin()" style="background:none; border:none; color:var(--dim); margin-top: 15px; cursor:pointer; font-size: 0.85rem;">ย้อนกลับ</button>
             </div>
+        </div>
+    </div>
+
+    <div id="obj-modal" class="objective-modal" onclick="toggleObjModal(false)">
+        <div class="obj-content" onclick="event.stopPropagation()">
+            <h2 style="color: var(--primary); text-align: center; margin-top: 0;">Parking System</h2>
+            <hr style="opacity: 0.1; margin: 20px 0;">
+            <p style="line-height: 1.8; text-indent: 40px; color: var(--text); font-weight: 300;">
+                ปัจจุบันห้างสรรพสินค้าขนาดใหญ่หลายแห่งมักประสบปัญหาในการจัดการพื้นที่จอดรถ โดยเฉพาะในช่วงวันหยุดสุดสัปดาห์หรือช่วงเทศกาลที่มีผู้ใช้บริการจำนวนมาก ผู้ขับขี่มักต้องใช้เวลานานในการวนหาที่จอดรถว่าง บางครั้งเกิดความไม่เป็นระเบียบและการจราจรติดขัดภายในพื้นที่จอดรถ นอกจากนี้ เจ้าหน้าที่ของห้างยังไม่สามารถตรวจสอบจำนวนช่องจอดที่เหลืออยู่หรือบริหารจัดการการเข้า–ออกของรถได้อย่างมีประสิทธิภาพ
+            </p>
+            <p style="line-height: 1.8; text-indent: 40px; color: var(--text); font-weight: 300;">
+                เพื่อแก้ไขปัญหาดังกล่าว กลุ่มผู้จัดทำจึงมีแนวคิดในการพัฒนาระบบ IoT (Internet of Things) เพื่อช่วยอำนวยความสะดวกในการจัดการพื้นที่จอดรถของห้างสรรพสินค้า โดยระบบนี้จะติดตั้งเซนเซอร์เพื่อตรวจจับการเข้า–ออกของรถยนต์ในแต่ละช่องจอด และส่งข้อมูลไปยังฐานข้อมูลกลางแบบเรียลไทม์ จากนั้นจะนำข้อมูลดังกล่าวมาแสดงผลผ่านจอแสดงผลหรือแอปพลิเคชัน เพื่อให้ผู้ใช้สามารถตรวจสอบจำนวนที่จอดว่างได้ทันที นอกจากนี้ ระบบยังสามารถกำหนดเวลาการเปิด–ปิดลานจอดรถ และแจ้งเตือนกรณีที่เกิดเหตุผิดปกติ เช่น ไฟไหม้หรือการบุกรุกได้อีกด้วย
+            </p>
+            <hr style="opacity: 0.1; margin: 20px 0;">
+            <p style="text-align: center; color: var(--dim); font-size: 0.9rem;">รายวิชาคอมพิวเตอร์ 23202</p>
+            <button class="btn-action" style="margin-top: 15px;" onclick="toggleObjModal(false)">ปิดหน้าต่าง</button>
         </div>
     </div>
 
@@ -223,6 +250,11 @@
             a.style.display = (a.style.display === 'block') ? 'none' : 'block';
         }
 
+        // --- เพิ่มฟังก์ชันเปิด/ปิด Modal จุดประสงค์ ---
+        function toggleObjModal(show) {
+            document.getElementById('obj-modal').style.display = show ? 'flex' : 'none';
+        }
+
         function enterApp(role) {
             if (role === 'admin' && document.getElementById('admin-pass').value !== '1234') { alert('รหัสผ่านไม่ถูกต้อง!'); return; }
             currentUserRole = role;
@@ -302,17 +334,14 @@
             });
         }
 
-        // แก้ไขฟังก์ชันการส่งข้อมูลใหม่
         function sendFeedback() {
             const msg = document.getElementById('fb-comment').value;
             if(!msg.trim()) { alert("กรุณาใส่ข้อความด้วยนะครับ"); return; }
-            
             db.ref('feedbacks').push({ 
-                user: "Anonymous", // กำหนดชื่อเป็น Anonymous อัตโนมัติ
+                user: "Anonymous", 
                 message: msg, 
                 time: new Date().toLocaleString() 
             });
-            
             document.getElementById('fb-comment').value = "";
             alert("ขอบคุณสำหรับข้อเสนอแนะ!");
         }
@@ -349,4 +378,3 @@
     </script>
 </body>
 </html>
-
