@@ -179,6 +179,15 @@
         </div>
 
         <div class="card area-full admin-only">
+            <div style="font-weight: 600; margin-bottom: 10px;">📢 จัดการประกาศ (Broadcast)</div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="text" id="broadcast-input" placeholder="พิมพ์ข้อความประกาศที่นี่..." style="flex: 1; min-width: 200px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: inherit; padding: 10px; border-radius: 10px;">
+                <button class="btn-action" style="width: auto; padding: 0 20px; background: var(--orange);" onclick="sendBroadcast()">ประกาศ</button>
+                <button class="btn-outline" style="width: auto; margin: 0; padding: 0 15px; border-color: var(--dim);" onclick="clearBroadcast()">ล้างประกาศ</button>
+            </div>
+        </div>
+
+        <div class="card area-full admin-only">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h4 style="margin:0;">📜 จัดการเหตุการณ์ SOS 
                     <button id="alert-master-btn" onclick="toggleAlertSystem()" style="margin-left:10px; padding:2px 10px; border-radius:8px; border:none; cursor:pointer; font-size:0.75rem; background:var(--primary); color:white;">🔔 การแจ้งเตือน: เปิด</button>
@@ -235,6 +244,19 @@
             updateStatus();
         });
 
+        // ดึงข้อมูลประกาศมาแสดง (สำหรับทุกคน)
+        db.ref('broadcast').on('value', s => {
+            const msg = s.val();
+            const bar = document.getElementById('broadcast-bar');
+            const text = document.getElementById('broadcast-msg');
+            if (msg && msg.trim() !== "") {
+                text.innerText = "⚠️ ประกาศ: " + msg;
+                bar.style.display = 'block';
+            } else {
+                bar.style.display = 'none';
+            }
+        });
+
         function updateStatus() {
             const totalMax = bikeMax + carMax, totalCurrent = currentBike + currentCar, percent = (totalCurrent / totalMax) * 100, display = document.getElementById('status-display');
             if (percent < 50) { display.innerText = "รถว่าง"; display.style.color = "var(--green)"; }
@@ -246,6 +268,22 @@
             document.getElementById('bike-bar').style.width = Math.min((currentBike / bikeMax * 100), 100) + "%";
             document.getElementById('car-bar').style.width = Math.min((currentCar / carMax * 100), 100) + "%";
             document.getElementById('total-car-bar').style.width = Math.min((totalCurrent / totalMax * 100), 100) + "%";
+        }
+
+        // --- 📢 Broadcast Functions ---
+        function sendBroadcast() {
+            const msg = document.getElementById('broadcast-input').value;
+            if (msg) {
+                db.ref('broadcast').set(msg);
+                document.getElementById('broadcast-input').value = "";
+                alert("ส่งประกาศเรียบร้อย!");
+            }
+        }
+
+        function clearBroadcast() {
+            if(confirm("ต้องการลบประกาศปัจจุบันใช่หรือไม่?")) {
+                db.ref('broadcast').set("");
+            }
         }
 
         // --- 🚨 SOS Master Switch ---
@@ -286,7 +324,7 @@
         function resolveSOS(key) { db.ref('sos_alerts/' + key).update({ active: false, resolved: true, acknowledged: true }); }
         function resolveAllSOS() { if(confirm("ช่วยเหลือทั้งหมด?")) { db.ref('sos_alerts').once('value', s => { const d = s.val(); if(d) { let up = {}; Object.keys(d).forEach(k => { up[k+'/resolved']=true; up[k+'/acknowledged']=true; }); db.ref('sos_alerts').update(up); } }); } }
 
-        // --- 📈 ตารางสถิติ (ดึงค่า cars และทำให้เป็นบวก) ---
+        // --- 📈 ตารางสถิติ ---
         const ctx = document.getElementById('historyChart').getContext('2d');
         const chart = new Chart(ctx, { type: 'line', data: { labels: [], datasets: [{ label: 'จำนวนรถ (บวก)', data: [], borderColor: '#3B82F6', tension: 0.3, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.1)' }] }, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
 
@@ -299,7 +337,6 @@
                 if (data) {
                     const times = Object.keys(data).sort();
                     chart.data.labels = times;
-                    // แก้จุดนี้: ดึงค่าจากคีย์ "cars" และทำเป็นจำนวนเต็มบวก (Math.abs)
                     chart.data.datasets[0].data = times.map(t => Math.abs(parseInt(data[t].cars) || 0));
                 } else { chart.data.labels = ["ไม่มีข้อมูล"]; chart.data.datasets[0].data = [0]; }
                 chart.update();
