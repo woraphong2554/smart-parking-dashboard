@@ -95,7 +95,6 @@
                 <h2 style="margin: 0 0 5px 0;">Parking System</h2>
                 <p style="color:var(--dim); font-size: 0.95rem; margin-bottom: 25px;">ระบบติดตามที่จอดรถและเฝ้าระวังภัย</p>
                 <button class="btn-action" onclick="enterApp('user')">เข้าสู่หน้าแดชบอร์ด(User)</button>
-                <button class="btn-outline" style="width:100%; padding:10px; border-radius:12px; border-color:var(--primary); color:var(--primary); margin-top:10px; cursor:pointer;" onclick="toggleObjModal(true)">📖 จุดประสงค์ของโครงงาน</button>
             </div>
             <div id="admin-login-box" style="display:none;">
                 <p style="color: var(--orange); margin-bottom: 15px;">พื้นที่สำหรับเจ้าหน้าที่ (Admin Area)</p>
@@ -130,7 +129,7 @@
         </div>
 
         <div class="card area-full">
-            <div id="lang-total-title" style="font-weight: 600;">🏢 รวมทั้งหมด (Total)</div>
+            <div style="font-weight: 600;">🏢 รวมทั้งหมด (Total)</div>
             <div class="val-large"><span id="total-car-display">0</span><span class="val-sub"> / <span id="total-max-display">--</span></span></div>
             <div class="progress-bg"><div id="total-car-bar" class="progress-fill" style="background: var(--primary);"></div></div>
         </div>
@@ -199,7 +198,7 @@
 
         <div class="card area-large">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <span style="font-weight: 600;">📈 สถิติย้อนหลัง (จำนวนเต็มบวก)</span>
+                <span style="font-weight: 600;">📈 สถิติย้อนหลัง (แยกประเภท)</span>
                 <input type="date" id="search-date" onchange="loadHistoryData()" style="width: auto; margin:0; padding: 5px; background:none; color:inherit; border:1px solid rgba(255,255,255,0.1); border-radius:8px;">
             </div>
             <div style="height: 250px;"><canvas id="historyChart"></canvas></div>
@@ -227,10 +226,8 @@
         let bikeMax = 50, carMax = 50, currentBike = 0, currentCar = 0;
         let alertSystemActive = true; 
 
-        // --- 🔑 Login: กด Enter ได้ ---
         function checkEnter(e) { if (e.key === "Enter") document.getElementById("admin-login-btn").click(); }
 
-        // --- 📡 Firebase Data ---
         db.ref('settings').on('value', s => {
             const d = s.val() || {}; bikeMax = d.bike_max || 50; carMax = d.car_max || 50;
             document.getElementById('bike-max-display').innerText = bikeMax;
@@ -240,21 +237,21 @@
         });
 
         db.ref('live_status').on('value', s => {
-            const d = s.val() || {}; currentBike = Math.abs(d.bike_count || 0); currentCar = Math.abs(d.car_count || 0);
+            const d = s.val() || {}; 
+            currentBike = Math.abs(d.bike_count || 0); 
+            currentCar = Math.abs(d.car_count || 0);
+            document.getElementById('smoke-display').innerText = d.smoke || 0;
+            document.getElementById('smoke-bar').style.width = (d.smoke || 0) + "%";
             updateStatus();
         });
 
-        // ดึงข้อมูลประกาศมาแสดง (สำหรับทุกคน)
         db.ref('broadcast').on('value', s => {
             const msg = s.val();
             const bar = document.getElementById('broadcast-bar');
             const text = document.getElementById('broadcast-msg');
             if (msg && msg.trim() !== "") {
-                text.innerText = "⚠️ ประกาศ: " + msg;
-                bar.style.display = 'block';
-            } else {
-                bar.style.display = 'none';
-            }
+                text.innerText = "⚠️ ประกาศ: " + msg; bar.style.display = 'block';
+            } else { bar.style.display = 'none'; }
         });
 
         function updateStatus() {
@@ -270,90 +267,101 @@
             document.getElementById('total-car-bar').style.width = Math.min((totalCurrent / totalMax * 100), 100) + "%";
         }
 
-        // --- 📢 Broadcast Functions ---
-        function sendBroadcast() {
-            const msg = document.getElementById('broadcast-input').value;
-            if (msg) {
-                db.ref('broadcast').set(msg);
-                document.getElementById('broadcast-input').value = "";
-                alert("ส่งประกาศเรียบร้อย!");
-            }
-        }
-
-        function clearBroadcast() {
-            if(confirm("ต้องการลบประกาศปัจจุบันใช่หรือไม่?")) {
-                db.ref('broadcast').set("");
-            }
-        }
-
-        // --- 🚨 SOS Master Switch ---
-        function toggleAlertSystem() {
-            alertSystemActive = !alertSystemActive;
-            document.getElementById('alert-master-btn').innerText = alertSystemActive ? "🔔 การแจ้งเตือน: เปิด" : "🔕 การแจ้งเตือน: ปิด";
-            document.getElementById('alert-master-btn').style.background = alertSystemActive ? "var(--primary)" : "var(--red)";
-            db.ref('sos_alerts').once('value', s => listenSOS());
-        }
-
-        function confirmEmergency() {
-            const loc = document.getElementById('sos-location').value, det = document.getElementById('sos-detail').value || "ไม่มีรายละเอียด";
-            db.ref('sos_alerts').push().set({ active: true, location: loc, detail: det, time: new Date().toLocaleString('th-TH'), timestamp: Date.now(), resolved: false, acknowledged: false });
-            document.getElementById('sos-detail').value = ""; alert("ส่งสัญญาณ SOS เรียบร้อย!");
-        }
-
-        function listenSOS() {
-            db.ref('sos_alerts').on('value', s => {
-                const data = s.val(), list = document.getElementById('sos-history-list'), alertContainer = document.getElementById('admin-alert-container');
-                list.innerHTML = ""; alertContainer.innerHTML = "";
-                let isAnyActiveAlert = false;
-                if (data) {
-                    Object.keys(data).reverse().forEach(key => {
-                        const item = data[key];
-                        list.innerHTML += `<div class="sos-history-item" style="${!item.acknowledged ? 'border:1px solid var(--red)' : ''}"><div><small>${item.time}</small><br><b>${item.location}</b>: ${item.detail}</div><div>${item.resolved ? '<span class="sos-badge bg-done">ช่วยเหลือแล้ว</span>' : `<button onclick="resolveSOS('${key}')" class="btn-action" style="padding:5px 10px; font-size:0.7rem; width:auto; background:var(--orange);">ยืนยันว่าทำแล้ว</button>`}</div></div>`;
-                        if (alertSystemActive && !item.acknowledged) {
-                            isAnyActiveAlert = true;
-                            alertContainer.innerHTML += `<div class="admin-sos-alert-box"><div>🚨 มีเหตุที่: <b>${item.location}</b></div><button onclick="acknowledgeSOS('${key}')" style="background:white; color:black; border:none; padding:5px 10px; border-radius:8px; cursor:pointer;">ปิดการแจ้งเตือนนี้</button></div>`;
-                        }
-                    });
-                }
-                alertContainer.style.display = (alertSystemActive && isAnyActiveAlert) ? 'block' : 'none';
-                document.getElementById('main-body').classList.toggle('strobe-alert', (alertSystemActive && isAnyActiveAlert));
-            });
-        }
-
-        function acknowledgeSOS(key) { db.ref('sos_alerts/' + key).update({ acknowledged: true }); }
-        function resolveSOS(key) { db.ref('sos_alerts/' + key).update({ active: false, resolved: true, acknowledged: true }); }
-        function resolveAllSOS() { if(confirm("ช่วยเหลือทั้งหมด?")) { db.ref('sos_alerts').once('value', s => { const d = s.val(); if(d) { let up = {}; Object.keys(d).forEach(k => { up[k+'/resolved']=true; up[k+'/acknowledged']=true; }); db.ref('sos_alerts').update(up); } }); } }
-
-        // --- 📈 ตารางสถิติ ---
         const ctx = document.getElementById('historyChart').getContext('2d');
-        const chart = new Chart(ctx, { type: 'line', data: { labels: [], datasets: [{ label: 'จำนวนรถ (บวก)', data: [], borderColor: '#3B82F6', tension: 0.3, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.1)' }] }, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
+        const chart = new Chart(ctx, { 
+            type: 'line', 
+            data: { 
+                labels: [], 
+                datasets: [
+                    { label: 'มอเตอร์ไซค์', data: [], borderColor: '#F59E0B', tension: 0.3, fill: true, backgroundColor: 'rgba(245, 158, 11, 0.1)' },
+                    { label: 'รถยนต์', data: [], borderColor: '#10B981', tension: 0.3, fill: true, backgroundColor: 'rgba(16, 185, 129, 0.1)' }
+                ] 
+            }, 
+            options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } 
+        });
 
         function loadHistoryData() {
             const dateInput = document.getElementById('search-date').value; if(!dateInput) return;
             const [y, m, d] = dateInput.split('-');
-            const dbPath = `history/${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}`;
+            const dbPath = `history/${d}-${m}-${y}`;
             db.ref(dbPath).once('value').then(s => {
                 const data = s.val();
                 if (data) {
                     const times = Object.keys(data).sort();
                     chart.data.labels = times;
-                    chart.data.datasets[0].data = times.map(t => Math.abs(parseInt(data[t].cars) || 0));
-                } else { chart.data.labels = ["ไม่มีข้อมูล"]; chart.data.datasets[0].data = [0]; }
+                    chart.data.datasets[0].data = times.map(t => data[t].bike_count || 0);
+                    chart.data.datasets[1].data = times.map(t => data[t].car_count || 0);
+                } else { 
+                    chart.data.labels = ["ไม่มีข้อมูล"]; 
+                    chart.data.datasets[0].data = [0]; chart.data.datasets[1].data = [0];
+                }
                 chart.update();
             });
         }
 
-        function toggleAdminLogin() { const u = document.getElementById('user-start-box'), a = document.getElementById('admin-login-box'); if(u.style.display==='none'){u.style.display='block';a.style.display='none';}else{u.style.display='none';a.style.display='block';document.getElementById('admin-pass').focus();} }
-        function enterApp(role) { if(role==='admin' && document.getElementById('admin-pass').value!=='1234'){alert('ผิด!'); return;} currentUserRole=role; document.getElementById('auth-overlay').style.display='none'; document.querySelectorAll('.admin-only').forEach(e=>e.style.display=(role==='admin'?'block':'none')); document.querySelectorAll('.user-only').forEach(e=>e.style.display=(role==='user'?'block':'none')); if(role==='admin'){ listenFeedback(); listenSOS(); } }
-        function sendFeedback() { const m = document.getElementById('fb-comment').value; if(m) { db.ref('feedbacks').push({ user: "Anonymous", message: m, time: new Date().toLocaleString() }); document.getElementById('fb-comment').value=""; alert("ขอบคุณครับ!"); } }
-        function listenFeedback() { db.ref('feedbacks').on('value', s => { const l = document.getElementById('admin-feedback-list'); l.innerHTML = ""; s.forEach(i => { l.innerHTML = `<div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:10px; margin-bottom:10px;"><small>${i.val().time}</small><br><b>${i.val().user}:</b> ${i.val().message}</div>` + l.innerHTML; }); }); }
+        function sendBroadcast() {
+            const msg = document.getElementById('broadcast-input').value;
+            if (msg) { db.ref('broadcast').set(msg); document.getElementById('broadcast-input').value = ""; }
+        }
+        function clearBroadcast() { if(confirm("ลบประกาศ?")) db.ref('broadcast').set(""); }
+        function toggleAlertSystem() { 
+            alertSystemActive = !alertSystemActive;
+            const btn = document.getElementById('alert-master-btn');
+            btn.innerText = alertSystemActive ? "🔔 การแจ้งเตือน: เปิด" : "🔕 การแจ้งเตือน: ปิด";
+            btn.style.background = alertSystemActive ? "var(--primary)" : "var(--red)";
+        }
+        function confirmEmergency() {
+            const loc = document.getElementById('sos-location').value, det = document.getElementById('sos-detail').value || "ไม่มีรายละเอียด";
+            db.ref('sos_alerts').push().set({ location: loc, detail: det, time: new Date().toLocaleString('th-TH'), resolved: false, acknowledged: false });
+            toggleEmergencyModal(false); alert("ส่ง SOS แล้ว");
+        }
+        function listenSOS() {
+            db.ref('sos_alerts').on('value', s => {
+                const data = s.val(), list = document.getElementById('sos-history-list'), alertBox = document.getElementById('admin-alert-container');
+                list.innerHTML = ""; alertBox.innerHTML = "";
+                let hasActive = false;
+                if (data) {
+                    Object.keys(data).reverse().forEach(k => {
+                        const item = data[k];
+                        list.innerHTML += `<div class="sos-history-item"><div><b>${item.location}</b>: ${item.detail}</div><div>${item.resolved ? '✅' : `<button onclick="resolveSOS('${k}')">ทำแล้ว</button>`}</div></div>`;
+                        if (alertSystemActive && !item.acknowledged) {
+                            hasActive = true;
+                            alertBox.innerHTML += `<div class="admin-sos-alert-box">🚨 ${item.location} <button onclick="acknowledgeSOS('${k}')">ปิด</button></div>`;
+                        }
+                    });
+                }
+                alertBox.style.display = hasActive ? 'block' : 'none';
+                document.getElementById('main-body').classList.toggle('strobe-alert', hasActive);
+            });
+        }
+        function acknowledgeSOS(k) { db.ref('sos_alerts/'+k).update({ acknowledged: true }); }
+        function resolveSOS(k) { db.ref('sos_alerts/'+k).update({ resolved: true, acknowledged: true }); }
+        function resolveAllSOS() { db.ref('sos_alerts').once('value', s => { if(s.val()) Object.keys(s.val()).forEach(k => resolveSOS(k)); }); }
+        function toggleAdminLogin() { 
+            const u = document.getElementById('user-start-box'), a = document.getElementById('admin-login-box');
+            if(u.style.display==='none'){ u.style.display='block'; a.style.display='none'; }
+            else { u.style.display='none'; a.style.display='block'; }
+        }
+        function enterApp(role) {
+            if(role==='admin' && document.getElementById('admin-pass').value!=='1234') return alert('รหัสผิด');
+            document.getElementById('auth-overlay').style.display='none';
+            document.querySelectorAll('.admin-only').forEach(e=>e.style.display=(role==='admin'?'block':'none'));
+            document.querySelectorAll('.user-only').forEach(e=>e.style.display=(role==='user'?'block':'none'));
+            if(role==='admin') { listenSOS(); }
+        }
+        function sendFeedback() {
+            const m = document.getElementById('fb-comment').value;
+            if(m) { db.ref('feedbacks').push({ message: m, time: new Date().toLocaleString() }); document.getElementById('fb-comment').value=""; alert("ขอบคุณครับ"); }
+        }
         function toggleTheme() { document.body.setAttribute('data-theme', document.body.getAttribute('data-theme')==='light'?'dark':'light'); }
-        function setCapacityPrompt(t) { const v = prompt(`ความจุใหม่:`, t==='bike'?bikeMax:carMax); if(v && !isNaN(v)) { let o={}; o[t+'_max']=parseInt(v); db.ref('settings').update(o); } }
-        function resetCarCount(t) { if(confirm('Reset?')){ let o={}; o[t+'_count']=0; db.ref('live_status').update(o); } }
-        function toggleObjModal(s) { document.getElementById('obj-modal').style.display = s ? 'flex' : 'none'; }
+        function setCapacityPrompt(t) { const v = prompt(`ความจุใหม่:`, 50); if(v) db.ref('settings').update({ [t+'_max']: parseInt(v) }); }
+        function resetCarCount(t) { if(confirm('Reset?')) db.ref('live_status').update({ [t+'_count']: 0 }); }
         function toggleEmergencyModal(s) { document.getElementById('emergency-modal').style.display = s ? 'flex' : 'none'; }
 
-        window.onload = () => { document.getElementById('search-date').value = new Date().toISOString().split('T')[0]; loadHistoryData(); updateClock(); };
+        window.onload = () => { 
+            document.getElementById('search-date').value = new Date().toISOString().split('T')[0]; 
+            loadHistoryData(); updateClock(); 
+        };
     </script>
 </body>
 </html>
