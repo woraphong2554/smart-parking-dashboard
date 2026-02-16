@@ -21,10 +21,6 @@
             margin: 0; padding: 0; min-height: 100vh; overflow-x: hidden; transition: 0.3s;
         }
 
-        .running-car { position: fixed; font-size: 26px; z-index: -1; opacity: 0.25; pointer-events: none; white-space: nowrap; }
-        @keyframes driveToRight { 0% { left: -100px; } 100% { left: 110vw; } }
-        @keyframes driveToLeft { 0% { left: 110vw; } 100% { left: -100px; } }
-
         #auth-overlay {
             position: fixed; inset: 0; background: rgba(11, 17, 33, 0.8); z-index: 6000;
             display: flex; justify-content: center; align-items: center; padding: 20px;
@@ -46,6 +42,19 @@
         .header-area { grid-column: span 3; display: flex; justify-content: space-between; align-items: center; padding: 10px 0; }
         
         .card { background: var(--card); border-radius: 20px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(12px); display: flex; flex-direction: column; justify-content: space-between; }
+
+        /* Status Indicator Styles */
+        .status-dot {
+            height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 8px;
+            transition: 0.5s;
+        }
+        .dot-green { background-color: var(--green); animation: pulse-green 2s infinite; }
+        .dot-orange { background-color: var(--orange); animation: pulse-orange 2s infinite; }
+        .dot-red { background-color: var(--red); animation: pulse-red 1s infinite; }
+
+        @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+        @keyframes pulse-orange { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
 
         .area-full { grid-column: span 3; }
         .area-large { grid-column: span 2; } 
@@ -69,9 +78,6 @@
         .time-text { font-size: 1.2rem; color: var(--primary); font-weight: 400; border: 1px solid var(--primary); padding: 2px 10px; border-radius: 8px; margin-bottom: 10px; }
 
         .sos-history-item { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .sos-badge { padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; }
-        .bg-done { background: var(--green); color: white; }
-
         .admin-sos-alert-box { background: #7f1d1d; border: 2px solid var(--red); border-radius: 15px; padding: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; color: white; }
 
         @keyframes strobe { 0% { background: var(--bg); } 50% { background: #450a0a; } 100% { background: var(--bg); } }
@@ -108,12 +114,13 @@
     <div id="emergency-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 7000; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(8px);">
         <div class="card" style="width: 90%; max-width: 380px; text-align: center; border: 1px solid var(--red);">
             <h2 style="color: var(--red);">🆘 แจ้งเหตุฉุกเฉิน</h2>
+            <input type="tel" id="sos-phone" placeholder="เบอร์โทรศัพท์ (10 หลัก)" maxlength="10" style="width:100%; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:inherit; border-radius:10px; padding:12px; margin-bottom:10px; box-sizing: border-box;">
             <select id="sos-location" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: inherit; padding: 12px; border-radius: 10px; width: 100%; margin-bottom: 10px;">
                 <option value="โซนทางเข้า">โซนทางเข้า</option>
                 <option value="โซนรถจักรยานยนต์">โซนรถจักรยานยนต์</option>
                 <option value="โซนรถยนต์">โซนรถยนต์</option>
             </select>
-            <textarea id="sos-detail" placeholder="รายละเอียดเหตุการณ์..." rows="2" style="width:100%; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:inherit; border-radius:10px; padding:10px; margin-bottom:10px;"></textarea>
+            <textarea id="sos-detail" placeholder="รายละเอียดเหตุการณ์..." rows="2" style="width:100%; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:inherit; border-radius:10px; padding:10px; margin-bottom:10px; box-sizing: border-box;"></textarea>
             <button class="btn-action btn-red" onclick="confirmEmergency()">🚨 ส่งสัญญาณ SOS</button>
             <button class="btn-outline" onclick="toggleEmergencyModal(false)" style="border:none;">ยกเลิก</button>
         </div>
@@ -164,7 +171,10 @@
                 <div id="clock-display" class="time-text">00:00:00</div>
                 <hr style="width: 100%; opacity: 0.1; margin: 10px 0;">
                 <div style="font-weight: 600;">สถานะปัจจุบัน</div>
-                <div id="status-display" class="status-text">--</div>
+                <div style="display: flex; align-items: center; justify-content: center;">
+                    <span id="live-dot" class="status-dot"></span>
+                    <div id="status-display" class="status-text">--</div>
+                </div>
             </div>
         </div>
 
@@ -225,6 +235,7 @@
         let currentUserRole = 'user';
         let bikeMax = 50, carMax = 50, currentBike = 0, currentCar = 0;
         let alertSystemActive = true; 
+        let sosTracker = {}; // สำหรับกัน Spam
 
         function checkEnter(e) { if (e.key === "Enter") document.getElementById("admin-login-btn").click(); }
 
@@ -256,9 +267,26 @@
 
         function updateStatus() {
             const totalMax = bikeMax + carMax, totalCurrent = currentBike + currentCar, percent = (totalCurrent / totalMax) * 100, display = document.getElementById('status-display');
-            if (percent < 50) { display.innerText = "รถว่าง"; display.style.color = "var(--green)"; }
-            else if (percent <= 95) { display.innerText = "รถเกือบเต็ม"; display.style.color = "var(--orange)"; }
-            else { display.innerText = "รถเต็ม"; display.style.color = "var(--red)"; }
+            const dot = document.getElementById('live-dot');
+            
+            dot.className = "status-dot"; // Reset classes
+
+            if (percent < 50) { 
+                display.innerText = "รถว่าง"; 
+                display.style.color = "var(--green)"; 
+                dot.classList.add("dot-green");
+            }
+            else if (percent <= 95) { 
+                display.innerText = "รถเกือบเต็ม"; 
+                display.style.color = "var(--orange)"; 
+                dot.classList.add("dot-orange");
+            }
+            else { 
+                display.innerText = "รถเต็ม"; 
+                display.style.color = "var(--red)"; 
+                dot.classList.add("dot-red");
+            }
+            
             document.getElementById('total-car-display').innerText = totalCurrent;
             document.getElementById('bike-display').innerText = currentBike >= bikeMax ? "MAX" : currentBike;
             document.getElementById('car-display').innerText = currentCar >= carMax ? "MAX" : currentCar;
@@ -299,6 +327,28 @@
             });
         }
 
+        function loadFeedbacks() {
+            db.ref('feedbacks').limitToLast(50).on('value', s => {
+                const list = document.getElementById('admin-feedback-list');
+                list.innerHTML = "";
+                const data = s.val();
+                if(data) {
+                    Object.values(data).reverse().forEach(item => {
+                        list.innerHTML += `
+                            <div style="background:rgba(255,255,255,0.05); padding:10px; margin-bottom:8px; border-radius:8px; border-left: 3px solid var(--primary);">
+                                <div style="font-size:0.75rem; color:var(--dim); display:flex; justify-content:space-between;">
+                                    <span>🕒 ${item.time || '-'}</span>
+                                </div>
+                                <div style="margin-top:4px;">${item.message || '-'}</div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--dim);'>ไม่มีข้อความ</div>";
+                }
+            });
+        }
+
         function sendBroadcast() {
             const msg = document.getElementById('broadcast-input').value;
             if (msg) { db.ref('broadcast').set(msg); document.getElementById('broadcast-input').value = ""; }
@@ -310,11 +360,40 @@
             btn.innerText = alertSystemActive ? "🔔 การแจ้งเตือน: เปิด" : "🔕 การแจ้งเตือน: ปิด";
             btn.style.background = alertSystemActive ? "var(--primary)" : "var(--red)";
         }
+
         function confirmEmergency() {
-            const loc = document.getElementById('sos-location').value, det = document.getElementById('sos-detail').value || "ไม่มีรายละเอียด";
-            db.ref('sos_alerts').push().set({ location: loc, detail: det, time: new Date().toLocaleString('th-TH'), resolved: false, acknowledged: false });
-            toggleEmergencyModal(false); alert("ส่ง SOS แล้ว");
+            const phone = document.getElementById('sos-phone').value;
+            const loc = document.getElementById('sos-location').value;
+            const det = document.getElementById('sos-detail').value || "ไม่มีรายละเอียด";
+
+            if (phone.length !== 10 || isNaN(phone)) {
+                alert("กรุณากรอกเบอร์โทรศัพท์ให้ครบ 10 หลัก");
+                return;
+            }
+
+            if (sosTracker[phone] && sosTracker[phone] >= 3) {
+                toggleEmergencyModal(false);
+                alert("ขออภัย ระบบระงับการแจ้งเตือนเบอร์นี้ชั่วคราวเนื่องจากมีการส่งซ้ำหลายครั้ง");
+                return;
+            }
+
+            sosTracker[phone] = (sosTracker[phone] || 0) + 1;
+
+            db.ref('sos_alerts').push().set({ 
+                phone: phone,
+                location: loc, 
+                detail: det, 
+                time: new Date().toLocaleString('th-TH'), 
+                resolved: false, 
+                acknowledged: false 
+            });
+
+            document.getElementById('sos-phone').value = "";
+            document.getElementById('sos-detail').value = "";
+            toggleEmergencyModal(false); 
+            alert("ส่ง SOS แล้ว");
         }
+
         function listenSOS() {
             db.ref('sos_alerts').on('value', s => {
                 const data = s.val(), list = document.getElementById('sos-history-list'), alertBox = document.getElementById('admin-alert-container');
@@ -323,10 +402,21 @@
                 if (data) {
                     Object.keys(data).reverse().forEach(k => {
                         const item = data[k];
-                        list.innerHTML += `<div class="sos-history-item"><div><b>${item.location}</b>: ${item.detail}</div><div>${item.resolved ? '✅' : `<button onclick="resolveSOS('${k}')">ทำแล้ว</button>`}</div></div>`;
+                        list.innerHTML += `
+                            <div class="sos-history-item">
+                                <div style="flex:1;">
+                                    <b>${item.location}</b> <span style="font-size:0.8rem; color:var(--dim);">(${item.phone || 'ไม่ระบุ'})</span><br>
+                                    <span style="font-size:0.9rem;">${item.detail}</span><br>
+                                    <span style="font-size:0.75rem; color:var(--primary);">🕒 ${item.time || 'ไม่ทราบเวลา'}</span>
+                                </div>
+                                <div style="margin-left:10px;">
+                                    ${item.resolved ? '✅' : `<button onclick="resolveSOS('${k}')" style="padding:5px 10px; border-radius:8px; border:none; background:var(--green); color:white; cursor:pointer; font-size:0.75rem;">ทำแล้ว</button>`}
+                                </div>
+                            </div>`;
+                        
                         if (alertSystemActive && !item.acknowledged) {
                             hasActive = true;
-                            alertBox.innerHTML += `<div class="admin-sos-alert-box">🚨 ${item.location} <button onclick="acknowledgeSOS('${k}')">ปิด</button></div>`;
+                            alertBox.innerHTML += `<div class="admin-sos-alert-box">🚨 ${item.location} (${item.phone}) <button onclick="acknowledgeSOS('${k}')">ปิด</button></div>`;
                         }
                     });
                 }
@@ -347,7 +437,10 @@
             document.getElementById('auth-overlay').style.display='none';
             document.querySelectorAll('.admin-only').forEach(e=>e.style.display=(role==='admin'?'block':'none'));
             document.querySelectorAll('.user-only').forEach(e=>e.style.display=(role==='user'?'block':'none'));
-            if(role==='admin') { listenSOS(); }
+            if(role==='admin') { 
+                listenSOS(); 
+                loadFeedbacks();
+            }
         }
         function sendFeedback() {
             const m = document.getElementById('fb-comment').value;
