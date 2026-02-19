@@ -43,7 +43,6 @@
         
         .card { background: var(--card); border-radius: 20px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(12px); display: flex; flex-direction: column; justify-content: space-between; }
 
-        /* Status Indicator Styles */
         .status-dot {
             height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 8px;
             transition: 0.5s;
@@ -79,6 +78,13 @@
 
         .sos-history-item { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         .admin-sos-alert-box { background: #7f1d1d; border: 2px solid var(--red); border-radius: 15px; padding: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; color: white; }
+
+        /* Report Card Styles */
+        .report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+        .report-item { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 12px; text-align: center; border-bottom: 3px solid transparent; }
+        .report-label { font-size: 0.8rem; color: var(--dim); display: block; }
+        .report-val { font-size: 1.2rem; font-weight: 600; color: var(--text); }
+        .pred-card { border-color: var(--primary); }
 
         @keyframes strobe { 0% { background: var(--bg); } 50% { background: #450a0a; } 100% { background: var(--bg); } }
         .strobe-alert { animation: strobe 0.5s infinite !important; }
@@ -139,6 +145,28 @@
             <div style="font-weight: 600;">🏢 รวมทั้งหมด (Total)</div>
             <div class="val-large"><span id="total-car-display">0</span><span class="val-sub"> / <span id="total-max-display">--</span></span></div>
             <div class="progress-bg"><div id="total-car-bar" class="progress-fill" style="background: var(--primary);"></div></div>
+        </div>
+
+        <div class="card area-full">
+            <div style="font-weight: 600;">📈 วิเคราะห์และพยากรณ์ (Analytics & Prediction)</div>
+            <div class="report-grid">
+                <div class="report-item">
+                    <span class="report-label">Peak Time วันนี้</span>
+                    <span id="report-peak-time" class="report-val">--:--</span>
+                </div>
+                <div class="report-item">
+                    <span class="report-label">เฉลี่ยการใช้งาน</span>
+                    <span id="report-avg-usage" class="report-val">0%</span>
+                </div>
+                <div class="report-item pred-card">
+                    <span class="report-label">🔮 คาดการณ์อีก 1 ชม.</span>
+                    <span id="pred-1h" class="report-val">--</span>
+                </div>
+                <div class="report-item pred-card">
+                    <span class="report-label">🔮 คาดการณ์อีก 3 ชม.</span>
+                    <span id="pred-3h" class="report-val">--</span>
+                </div>
+            </div>
         </div>
 
         <div class="card">
@@ -229,13 +257,21 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
+        // --- ระบบเสียง (Sound System) ---
+        const sounds = {
+            sos: new Audio('https://actions.google.com/sounds/v1/emergency/emergency_siren_short.ogg'),
+            notify: new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg'),
+            click: new Audio('https://actions.google.com/sounds/v1/ui/simple_click.ogg')
+        };
+        sounds.sos.loop = true;
+
         function updateClock() { document.getElementById('clock-display').innerText = new Date().toLocaleTimeString('th-TH'); }
         setInterval(updateClock, 1000);
 
         let currentUserRole = 'user';
         let bikeMax = 50, carMax = 50, currentBike = 0, currentCar = 0;
         let alertSystemActive = true; 
-        let sosTracker = {}; // สำหรับกัน Spam
+        let sosTracker = {}; 
 
         function checkEnter(e) { if (e.key === "Enter") document.getElementById("admin-login-btn").click(); }
 
@@ -254,6 +290,12 @@
             document.getElementById('smoke-display').innerText = d.smoke || 0;
             document.getElementById('smoke-bar').style.width = (d.smoke || 0) + "%";
             updateStatus();
+            
+            const selectedDate = document.getElementById('search-date').value;
+            const todayStr = new Date().toISOString().split('T')[0];
+            if (selectedDate === todayStr) {
+                loadHistoryData();
+            }
         });
 
         db.ref('broadcast').on('value', s => {
@@ -262,29 +304,21 @@
             const text = document.getElementById('broadcast-msg');
             if (msg && msg.trim() !== "") {
                 text.innerText = "⚠️ ประกาศ: " + msg; bar.style.display = 'block';
+                if(currentUserRole === 'user') sounds.notify.play();
             } else { bar.style.display = 'none'; }
         });
 
         function updateStatus() {
             const totalMax = bikeMax + carMax, totalCurrent = currentBike + currentCar, percent = (totalCurrent / totalMax) * 100, display = document.getElementById('status-display');
             const dot = document.getElementById('live-dot');
-            
-            dot.className = "status-dot"; // Reset classes
+            dot.className = "status-dot"; 
 
             if (percent < 50) { 
-                display.innerText = "รถว่าง"; 
-                display.style.color = "var(--green)"; 
-                dot.classList.add("dot-green");
-            }
-            else if (percent <= 95) { 
-                display.innerText = "รถเกือบเต็ม"; 
-                display.style.color = "var(--orange)"; 
-                dot.classList.add("dot-orange");
-            }
-            else { 
-                display.innerText = "รถเต็ม"; 
-                display.style.color = "var(--red)"; 
-                dot.classList.add("dot-red");
+                display.innerText = "รถว่าง"; display.style.color = "var(--green)"; dot.classList.add("dot-green");
+            } else if (percent <= 95) { 
+                display.innerText = "รถเกือบเต็ม"; display.style.color = "var(--orange)"; dot.classList.add("dot-orange");
+            } else { 
+                display.innerText = "รถเต็ม"; display.style.color = "var(--red)"; dot.classList.add("dot-red");
             }
             
             document.getElementById('total-car-display').innerText = totalCurrent;
@@ -298,13 +332,10 @@
         const ctx = document.getElementById('historyChart').getContext('2d');
         const chart = new Chart(ctx, { 
             type: 'line', 
-            data: { 
-                labels: [], 
-                datasets: [
-                    { label: 'มอเตอร์ไซค์', data: [], borderColor: '#F59E0B', tension: 0.3, fill: true, backgroundColor: 'rgba(245, 158, 11, 0.1)' },
-                    { label: 'รถยนต์', data: [], borderColor: '#10B981', tension: 0.3, fill: true, backgroundColor: 'rgba(16, 185, 129, 0.1)' }
-                ] 
-            }, 
+            data: { labels: [], datasets: [
+                { label: 'มอเตอร์ไซค์', data: [], borderColor: '#F59E0B', tension: 0.3, fill: true, backgroundColor: 'rgba(245, 158, 11, 0.1)' },
+                { label: 'รถยนต์', data: [], borderColor: '#10B981', tension: 0.3, fill: true, backgroundColor: 'rgba(16, 185, 129, 0.1)' }
+            ]}, 
             options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } 
         });
 
@@ -316,145 +347,156 @@
                 const data = s.val();
                 if (data) {
                     const times = Object.keys(data).sort();
+                    const bikeData = times.map(t => data[t].bike_count || 0);
+                    const carData = times.map(t => data[t].car_count || 0);
+                    
                     chart.data.labels = times;
-                    chart.data.datasets[0].data = times.map(t => data[t].bike_count || 0);
-                    chart.data.datasets[1].data = times.map(t => data[t].car_count || 0);
+                    chart.data.datasets[0].data = bikeData;
+                    chart.data.datasets[1].data = carData;
+                    chart.update('none');
+
+                    // --- คำนวณ Analytics & Prediction ---
+                    analyzeData(times, bikeData, carData);
                 } else { 
-                    chart.data.labels = ["ไม่มีข้อมูล"]; 
-                    chart.data.datasets[0].data = [0]; chart.data.datasets[1].data = [0];
+                    chart.data.labels = ["ไม่มีข้อมูล"]; chart.data.datasets[0].data = [0]; chart.data.datasets[1].data = [0];
+                    chart.update();
+                    resetReport();
                 }
-                chart.update();
             });
         }
 
+        function analyzeData(times, bikeData, carData) {
+            let maxTotal = 0;
+            let peakTime = "--:--";
+            let sumTotal = 0;
+            const totalCapacity = bikeMax + carMax;
+
+            for (let i = 0; i < times.length; i++) {
+                let currentTotal = bikeData[i] + carData[i];
+                sumTotal += currentTotal;
+                if (currentTotal > maxTotal) {
+                    maxTotal = currentTotal;
+                    peakTime = times[i];
+                }
+            }
+
+            const avgUsage = Math.round((sumTotal / times.length / totalCapacity) * 100) || 0;
+            document.getElementById('report-peak-time').innerText = peakTime;
+            document.getElementById('report-avg-usage').innerText = avgUsage + "%";
+
+            // --- Logic พยากรณ์ความหนาแน่น (Simple Trend Prediction) ---
+            if (times.length >= 2) {
+                const lastIdx = times.length - 1;
+                const prevIdx = Math.max(0, lastIdx - 4); // ดูย้อนกลับประมาณ 4 จุดข้อมูล
+                
+                const lastVal = bikeData[lastIdx] + carData[lastIdx];
+                const prevVal = bikeData[prevIdx] + carData[prevIdx];
+                
+                const diff = (lastVal - prevVal) / Math.max(1, lastIdx - prevIdx); // อัตราการเปลี่ยนแปลงต่อจุด
+                
+                // คาดการณ์แนวโน้ม (Linear Projection)
+                const pred1 = Math.min(totalCapacity, Math.max(0, lastVal + (diff * 4))); // สมมติ 4 จุด = 1 ชม.
+                const pred3 = Math.min(totalCapacity, Math.max(0, lastVal + (diff * 12))); // สมมติ 12 จุด = 3 ชม.
+                
+                updatePredictionUI('pred-1h', (pred1 / totalCapacity) * 100);
+                updatePredictionUI('pred-3h', (pred3 / totalCapacity) * 100);
+            }
+        }
+
+        function updatePredictionUI(id, percent) {
+            const el = document.getElementById(id);
+            let text = "";
+            if (percent < 40) { text = "ว่าง"; el.style.color = "var(--green)"; }
+            else if (percent < 80) { text = "ปานกลาง"; el.style.color = "var(--orange)"; }
+            else { text = "หนาแน่น"; el.style.color = "var(--red)"; }
+            el.innerText = text + ` (${Math.round(percent)}%)`;
+        }
+
+        function resetReport() {
+            document.getElementById('report-peak-time').innerText = "--:--";
+            document.getElementById('report-avg-usage').innerText = "0%";
+            document.getElementById('pred-1h').innerText = "--";
+            document.getElementById('pred-3h').innerText = "--";
+        }
+
         function loadFeedbacks() {
+            db.ref('feedbacks').limitToLast(1).on('child_added', () => { if(currentUserRole==='admin') sounds.notify.play(); });
             db.ref('feedbacks').limitToLast(50).on('value', s => {
                 const list = document.getElementById('admin-feedback-list');
                 list.innerHTML = "";
                 const data = s.val();
                 if(data) {
                     Object.values(data).reverse().forEach(item => {
-                        list.innerHTML += `
-                            <div style="background:rgba(255,255,255,0.05); padding:10px; margin-bottom:8px; border-radius:8px; border-left: 3px solid var(--primary);">
-                                <div style="font-size:0.75rem; color:var(--dim); display:flex; justify-content:space-between;">
-                                    <span>🕒 ${item.time || '-'}</span>
-                                </div>
-                                <div style="margin-top:4px;">${item.message || '-'}</div>
-                            </div>
-                        `;
+                        list.innerHTML += `<div style="background:rgba(255,255,255,0.05); padding:10px; margin-bottom:8px; border-radius:8px; border-left: 3px solid var(--primary);"><div style="font-size:0.75rem; color:var(--dim);">🕒 ${item.time || '-'}</div><div style="margin-top:4px;">${item.message || '-'}</div></div>`;
                     });
-                } else {
-                    list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--dim);'>ไม่มีข้อความ</div>";
                 }
             });
         }
 
         function sendBroadcast() {
             const msg = document.getElementById('broadcast-input').value;
-            if (msg) { db.ref('broadcast').set(msg); document.getElementById('broadcast-input').value = ""; }
+            if (msg) { db.ref('broadcast').set(msg); document.getElementById('broadcast-input').value = ""; sounds.click.play(); }
         }
-        function clearBroadcast() { if(confirm("ลบประกาศ?")) db.ref('broadcast').set(""); }
-        function toggleAlertSystem() { 
-            alertSystemActive = !alertSystemActive;
-            const btn = document.getElementById('alert-master-btn');
-            btn.innerText = alertSystemActive ? "🔔 การแจ้งเตือน: เปิด" : "🔕 การแจ้งเตือน: ปิด";
-            btn.style.background = alertSystemActive ? "var(--primary)" : "var(--red)";
-        }
+        function clearBroadcast() { if(confirm("ลบประกาศ?")) { db.ref('broadcast').set(""); sounds.click.play(); } }
+        function toggleAlertSystem() { sounds.click.play(); alertSystemActive = !alertSystemActive; if(!alertSystemActive) sounds.sos.pause(); }
 
         function confirmEmergency() {
             const phone = document.getElementById('sos-phone').value;
             const loc = document.getElementById('sos-location').value;
             const det = document.getElementById('sos-detail').value || "ไม่มีรายละเอียด";
-
-            if (phone.length !== 10 || isNaN(phone)) {
-                alert("กรุณากรอกเบอร์โทรศัพท์ให้ครบ 10 หลัก");
-                return;
-            }
-
-            if (sosTracker[phone] && sosTracker[phone] >= 3) {
-                toggleEmergencyModal(false);
-                alert("ขออภัย ระบบระงับการแจ้งเตือนเบอร์นี้ชั่วคราวเนื่องจากมีการส่งซ้ำหลายครั้ง");
-                return;
-            }
-
-            sosTracker[phone] = (sosTracker[phone] || 0) + 1;
-
-            db.ref('sos_alerts').push().set({ 
-                phone: phone,
-                location: loc, 
-                detail: det, 
-                time: new Date().toLocaleString('th-TH'), 
-                resolved: false, 
-                acknowledged: false 
-            });
-
-            document.getElementById('sos-phone').value = "";
-            document.getElementById('sos-detail').value = "";
-            toggleEmergencyModal(false); 
-            alert("ส่ง SOS แล้ว");
+            if (phone.length !== 10 || isNaN(phone)) return alert("กรุณากรอกเบอร์โทรศัพท์ให้ครบ 10 หลัก");
+            db.ref('sos_alerts').push().set({ phone, location: loc, detail: det, time: new Date().toLocaleString('th-TH'), resolved: false, acknowledged: false });
+            toggleEmergencyModal(false); sounds.notify.play(); alert("ส่ง SOS แล้ว");
         }
 
         function listenSOS() {
             db.ref('sos_alerts').on('value', s => {
-                const data = s.val(), list = document.getElementById('sos-history-list'), alertBox = document.getElementById('admin-alert-container');
-                list.innerHTML = ""; alertBox.innerHTML = "";
+                const data = s.val(), alertBox = document.getElementById('admin-alert-container');
                 let hasActive = false;
                 if (data) {
+                    Object.keys(data).forEach(k => { if (!data[k].acknowledged) hasActive = true; });
+                }
+                document.getElementById('main-body').classList.toggle('strobe-alert', hasActive && alertSystemActive);
+                if(hasActive && alertSystemActive) { sounds.sos.play().catch(()=>{}); } else { sounds.sos.pause(); }
+                
+                const list = document.getElementById('sos-history-list');
+                list.innerHTML = ""; alertBox.innerHTML = "";
+                if(data) {
                     Object.keys(data).reverse().forEach(k => {
                         const item = data[k];
-                        list.innerHTML += `
-                            <div class="sos-history-item">
-                                <div style="flex:1;">
-                                    <b>${item.location}</b> <span style="font-size:0.8rem; color:var(--dim);">(${item.phone || 'ไม่ระบุ'})</span><br>
-                                    <span style="font-size:0.9rem;">${item.detail}</span><br>
-                                    <span style="font-size:0.75rem; color:var(--primary);">🕒 ${item.time || 'ไม่ทราบเวลา'}</span>
-                                </div>
-                                <div style="margin-left:10px;">
-                                    ${item.resolved ? '✅' : `<button onclick="resolveSOS('${k}')" style="padding:5px 10px; border-radius:8px; border:none; background:var(--green); color:white; cursor:pointer; font-size:0.75rem;">ทำแล้ว</button>`}
-                                </div>
-                            </div>`;
-                        
-                        if (alertSystemActive && !item.acknowledged) {
-                            hasActive = true;
-                            alertBox.innerHTML += `<div class="admin-sos-alert-box">🚨 ${item.location} (${item.phone}) <button onclick="acknowledgeSOS('${k}')">ปิด</button></div>`;
+                        list.innerHTML += `<div class="sos-history-item"><div style="flex:1;"><b>${item.location}</b> <span style="font-size:0.8rem; color:var(--dim);">(${item.phone})</span><br><span>${item.detail}</span></div><div>${item.resolved ? '✅' : `<button onclick="resolveSOS('${k}')" style="padding:5px 10px; border-radius:8px; border:none; background:var(--green); color:white; cursor:pointer;">ทำแล้ว</button>`}</div></div>`;
+                        if (!item.acknowledged && alertSystemActive) {
+                            alertBox.innerHTML += `<div class="admin-sos-alert-box">🚨 SOS: ${item.location} <button onclick="acknowledgeSOS('${k}')" style="background:white; color:var(--red); border:none; border-radius:5px; padding:2px 10px; cursor:pointer;">ปิดเสียง</button></div>`;
                         }
                     });
                 }
-                alertBox.style.display = hasActive ? 'block' : 'none';
-                document.getElementById('main-body').classList.toggle('strobe-alert', hasActive);
+                alertBox.style.display = (alertBox.innerHTML !== "") ? 'block' : 'none';
             });
         }
-        function acknowledgeSOS(k) { db.ref('sos_alerts/'+k).update({ acknowledged: true }); }
-        function resolveSOS(k) { db.ref('sos_alerts/'+k).update({ resolved: true, acknowledged: true }); }
-        function resolveAllSOS() { db.ref('sos_alerts').once('value', s => { if(s.val()) Object.keys(s.val()).forEach(k => resolveSOS(k)); }); }
-        function toggleAdminLogin() { 
-            const u = document.getElementById('user-start-box'), a = document.getElementById('admin-login-box');
-            if(u.style.display==='none'){ u.style.display='block'; a.style.display='none'; }
-            else { u.style.display='none'; a.style.display='block'; }
-        }
+
+        function acknowledgeSOS(k) { sounds.click.play(); db.ref('sos_alerts/'+k).update({ acknowledged: true }); }
+        function resolveSOS(k) { sounds.click.play(); db.ref('sos_alerts/'+k).update({ resolved: true, acknowledged: true }); }
+        function resolveAllSOS() { if(confirm("ช่วยทั้งหมด?")) db.ref('sos_alerts').once('value', s => { if(s.val()) Object.keys(s.val()).forEach(k => resolveSOS(k)); }); }
+
+        function toggleAdminLogin() { sounds.click.play(); const u = document.getElementById('user-start-box'), a = document.getElementById('admin-login-box'); u.style.display = (u.style.display==='none'?'block':'none'); a.style.display = (a.style.display==='none'?'block':'none'); }
         function enterApp(role) {
             if(role==='admin' && document.getElementById('admin-pass').value!=='1234') return alert('รหัสผิด');
+            currentUserRole = role; sounds.click.play();
             document.getElementById('auth-overlay').style.display='none';
             document.querySelectorAll('.admin-only').forEach(e=>e.style.display=(role==='admin'?'block':'none'));
             document.querySelectorAll('.user-only').forEach(e=>e.style.display=(role==='user'?'block':'none'));
-            if(role==='admin') { 
-                listenSOS(); 
-                loadFeedbacks();
-            }
+            if(role==='admin') { listenSOS(); loadFeedbacks(); }
         }
         function sendFeedback() {
             const m = document.getElementById('fb-comment').value;
-            if(m) { db.ref('feedbacks').push({ message: m, time: new Date().toLocaleString() }); document.getElementById('fb-comment').value=""; alert("ขอบคุณครับ"); }
+            if(m) { db.ref('feedbacks').push({ message: m, time: new Date().toLocaleString() }); document.getElementById('fb-comment').value=""; alert("ขอบคุณครับ"); sounds.notify.play(); }
         }
-        function toggleTheme() { document.body.setAttribute('data-theme', document.body.getAttribute('data-theme')==='light'?'dark':'light'); }
-        function setCapacityPrompt(t) { const v = prompt(`ความจุใหม่:`, 50); if(v) db.ref('settings').update({ [t+'_max']: parseInt(v) }); }
-        function resetCarCount(t) { if(confirm('Reset?')) db.ref('live_status').update({ [t+'_count']: 0 }); }
-        function toggleEmergencyModal(s) { document.getElementById('emergency-modal').style.display = s ? 'flex' : 'none'; }
+        function toggleTheme() { sounds.click.play(); document.body.setAttribute('data-theme', document.body.getAttribute('data-theme')==='light'?'dark':'light'); }
+        function setCapacityPrompt(t) { sounds.click.play(); const v = prompt(`ความจุใหม่:`, 50); if(v) db.ref('settings').update({ [t+'_max']: parseInt(v) }); }
+        function resetCarCount(t) { sounds.click.play(); if(confirm('Reset?')) db.ref('live_status').update({ [t+'_count']: 0 }); }
+        function toggleEmergencyModal(s) { sounds.click.play(); document.getElementById('emergency-modal').style.display = s ? 'flex' : 'none'; }
 
-        window.onload = () => { 
-            document.getElementById('search-date').value = new Date().toISOString().split('T')[0]; 
-            loadHistoryData(); updateClock(); 
-        };
+        window.onload = () => { document.getElementById('search-date').value = new Date().toISOString().split('T')[0]; loadHistoryData(); updateClock(); };
     </script>
 </body>
 </html>
